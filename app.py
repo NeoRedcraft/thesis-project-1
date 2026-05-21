@@ -1,10 +1,15 @@
 import os
-os.environ["KERAS_BACKEND"] = "torch"
-
 import streamlit as st
 import numpy as np
 from PIL import Image
-import keras
+import torch
+os.environ["KERAS_BACKEND"] = "torch"
+os.environ["TORCHINDUCTOR_CACHE_DIR"] = "C:/temp"
+
+# Ensure the temp compilation directory exists
+os.makedirs("C:/temp", exist_ok=True)
+
+
 
 # Set page configuration with a premium icon and title
 st.set_page_config(
@@ -24,32 +29,33 @@ st.markdown("""
         font-family: 'Outfit', sans-serif;
     }
     
-    /* Elegant Dark Mode Background & Sidebar */
+    /* Elegant Light Mode Background & Sidebar */
     .stApp {
-        background: linear-gradient(135deg, #101216 0%, #1a1d24 100%);
-        color: #e2e8f0;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        color: #0f172a;
     }
     
     section[data-testid="stSidebar"] {
-        background-color: #111317 !important;
-        border-right: 1px solid #2d3139;
+        background-color: #ffffff !important;
+        border-right: 1px solid #e2e8f0;
     }
 
     /* Cards and Glassmorphism Containers */
     .glass-card {
-        background: rgba(30, 34, 42, 0.6);
+        background: rgba(255, 255, 255, 0.7);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(148, 163, 184, 0.15);
         border-radius: 16px;
         padding: 24px;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        box-shadow: 0 8px 32px 0 rgba(148, 163, 184, 0.1);
         margin-bottom: 20px;
         transition: all 0.3s ease;
     }
     
     .glass-card:hover {
-        border-color: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 126, 95, 0.3);
         transform: translateY(-2px);
+        box-shadow: 0 12px 40px 0 rgba(148, 163, 184, 0.18);
     }
     
     /* Headings and Titles */
@@ -63,7 +69,7 @@ st.markdown("""
     }
     
     .subtitle {
-        color: #94a3b8;
+        color: #64748b;
         font-size: 1.1rem;
         margin-bottom: 25px;
         font-weight: 300;
@@ -71,30 +77,30 @@ st.markdown("""
 
     /* Glow Cards for Results */
     .glow-card-beverage {
-        background: rgba(13, 148, 136, 0.15);
-        border: 1px solid rgba(13, 148, 136, 0.3);
+        background: rgba(13, 148, 136, 0.08);
+        border: 1px solid rgba(13, 148, 136, 0.25);
         border-radius: 12px;
         padding: 20px;
         text-align: center;
-        box-shadow: 0 0 20px rgba(13, 148, 136, 0.1);
+        box-shadow: 0 0 20px rgba(13, 148, 136, 0.05);
     }
     
     .glow-card-snack {
-        background: rgba(244, 63, 94, 0.15);
-        border: 1px solid rgba(244, 63, 94, 0.3);
+        background: rgba(244, 63, 94, 0.08);
+        border: 1px solid rgba(244, 63, 94, 0.25);
         border-radius: 12px;
         padding: 20px;
         text-align: center;
-        box-shadow: 0 0 20px rgba(244, 63, 94, 0.1);
+        box-shadow: 0 0 20px rgba(244, 63, 94, 0.05);
     }
     
     .glow-card-staple {
-        background: rgba(245, 158, 11, 0.15);
-        border: 1px solid rgba(245, 158, 11, 0.3);
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.25);
         border-radius: 12px;
         padding: 20px;
         text-align: center;
-        box-shadow: 0 0 20px rgba(245, 158, 11, 0.1);
+        box-shadow: 0 0 20px rgba(245, 158, 11, 0.05);
     }
     
     .glow-title {
@@ -118,7 +124,7 @@ st.markdown("""
     }
     
     .progress-bar-bg {
-        background-color: #2a2e37;
+        background-color: #e2e8f0;
         border-radius: 8px;
         height: 12px;
         width: 100%;
@@ -138,8 +144,8 @@ st.markdown("""
 
     /* File uploader custom borders */
     [data-testid="stFileUploader"] {
-        background: rgba(30, 34, 42, 0.4) !important;
-        border: 2px dashed rgba(255, 255, 255, 0.1) !important;
+        background: rgba(255, 255, 255, 0.5) !important;
+        border: 2px dashed rgba(148, 163, 184, 0.3) !important;
         border-radius: 12px !important;
         padding: 15px !important;
     }
@@ -166,7 +172,7 @@ st.markdown("""
     
     /* Divider Customization */
     hr {
-        border-color: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(15, 23, 42, 0.08) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -200,30 +206,38 @@ CLASS_NAMES = ['BEVERAGE', 'SNACK', 'STAPLE']
 # ----------------- Sidebar Configuration -----------------
 
 st.sidebar.markdown("<h3 style='color: #ff7e5f; font-weight: 700; margin-bottom: 0;'>⚙️ Model Settings</h3>", unsafe_allow_html=True)
-st.sidebar.markdown("<p style='color: #94a3b8; font-size: 0.85rem; margin-top: 0;'>Manage the deployed Keras classifier</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color: #64748b; font-size: 0.85rem; margin-top: 0;'>Manage the deployed Keras classifier</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
-default_model_name = "mobilenetv2_meal_classifier.keras"
 model_source = st.sidebar.radio(
     "Choose Model Source:",
-    ("Use Pre-trained Model (Default)", "Upload Custom .keras Model")
+    ("ResNet50 Model", "MobileNetV2 Model", "Upload custom .keras file")
 )
 
 model_path = None
 uploaded_model = None
 
-if model_source == "Use Pre-trained Model (Default)":
-    if os.path.exists(default_model_name):
-        model_path = default_model_name
-        st.sidebar.success(f"✔ Found default model: `{default_model_name}`")
+if model_source == "ResNet50 Model":
+    resnet_model_name = "resnet50_meal_classifier3_iter1.keras"
+    if os.path.exists(resnet_model_name):
+        model_path = resnet_model_name
+        st.sidebar.success(f"✔ Found ResNet50 model: `{resnet_model_name}`")
     else:
-        st.sidebar.error(f"❌ Default model `{default_model_name}` not found in the root directory.")
-        st.sidebar.info("Please select the 'Upload Custom' option or place the model file in the workspace.")
+        st.sidebar.error(f"❌ ResNet50 model `{resnet_model_name}` not found in the root directory.")
+        st.sidebar.info("Please place the model file in the workspace or use the custom upload option.")
+elif model_source == "MobileNetV2 Model":
+    mobilenet_model_name = "mobilenetv2_meal_classifier3_iter1.keras"
+    if os.path.exists(mobilenet_model_name):
+        model_path = mobilenet_model_name
+        st.sidebar.success(f"✔ Found MobileNetV2 model: `{mobilenet_model_name}`")
+    else:
+        st.sidebar.error(f"❌ MobileNetV2 model `{mobilenet_model_name}` not found in the root directory.")
+        st.sidebar.info("Please place the model file in the workspace or use the custom upload option.")
 else:
     uploaded_model = st.sidebar.file_uploader(
         "Upload your .keras file", 
         type=["keras"],
-        help="Provide a compiled food classification model trained on MobileNetV2"
+        help="Provide a compiled food classification model"
     )
     if uploaded_model is not None:
         model_path = save_uploaded_file(uploaded_model)
@@ -232,21 +246,12 @@ else:
         st.sidebar.warning("Waiting for model file upload...")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("<h4 style='color: #feb47b;'>📊 Model Architecture</h4>", unsafe_allow_html=True)
-st.sidebar.markdown("""
-- **Backbone**: MobileNetV2 (ImageNet)
-- **Input Dimensions**: 224 x 224 x 3
-- **Output Nodes**: 3 Categories
-- **Internal Preprocessing**: Built-in `preprocess_input` layer mapping pixels from [0, 255] to [-1, 1].
-""")
-
-st.sidebar.markdown("---")
 st.sidebar.markdown("<p style='text-align: center; color: #64748b; font-size: 0.8rem;'>FoodScan Meal Classifier v1.0.0<br>© 2026 Felipe III</p>", unsafe_allow_html=True)
 
 # ----------------- Main Interface -----------------
 
 st.markdown("<h1 class='main-title'>🍽️ FoodScan: Meal Category Classifier</h1>", unsafe_allow_html=True)
-st.markdown("<p class='subtitle'>Deploy your MobileNetV2 deep learning model in seconds to distinguish Staples, Snacks, and Beverages.</p>", unsafe_allow_html=True)
+st.markdown("<p class='subtitle'>Deploy your deep learning model in seconds to distinguish Staples, Snacks, and Beverages.</p>", unsafe_allow_html=True)
 
 # Ensure keras and torch are imported in the main loop to verify installation
 try:
@@ -336,9 +341,9 @@ with col2:
             
         st.markdown(f"""
         <div class='{card_class}'>
-            <span style='font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px; color: #cbd5e1; font-weight: 500;'>Top Prediction</span>
+            <span style='font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px; color: #64748b; font-weight: 500;'>Top Prediction</span>
             <div class='glow-title' style='color: {color_theme};'>{pred_class}</div>
-            <span style='font-size: 1.4rem; font-weight: 600; color: #f8fafc;'>{confidence:.2%} Confidence</span>
+            <span style='font-size: 1.4rem; font-weight: 600; color: #0f172a;'>{confidence:.2%} Confidence</span>
         </div>
         <br>
         """, unsafe_allow_html=True)
